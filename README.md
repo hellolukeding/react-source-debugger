@@ -19,6 +19,124 @@
 3. [`HostRootFiber`对象](https://github.com/facebook/react/blob/v17.0.2/packages/react-reconciler/src/ReactFiber.old.js#L431-L449)
    - 属于 `react-reconciler`包, 这是 react 应用中的第一个 Fiber 对象, 是 Fiber 树的根节点, 节点的类型是 `HostRoot`.
 
+## React 调度实现
+
+> 调度中心核心代码[SchedulerHostConfig.default.js](https://github.com/facebook/react/blob/v17.0.2/packages/scheduler/src/forks/SchedulerHostConfig.default.js)
+
+### 请求调度 requestHostCallback
+
+```javascript
+//请求调度
+requestHostCallback = function (callback) {
+  // 1. 保存callback
+  scheduledHostCallback = callback;
+  if (!isMessageLoopRunning) {
+    isMessageLoopRunning = true;
+    // 2. 通过 MessageChannel 发送消息
+    port.postMessage(null);
+  }
+};
+```
+
+### 取消调度 cancleHostCallback
+
+```javascript
+cancelHostCallback = function () {
+   scheduledHostCallback = null;
+}
+```
+
+### 时间切片
+
+```javascript
+const localPerformance = performance;
+// 获取当前时间
+getCurrentTime = () => localPerformance.now();
+
+// 时间切片周期, 默认是5ms(如果一个task运行超过该周期, 下一个task执行之前, 会把控制权归还浏览器)
+let yieldInterval = 5;
+// 当前时间切片的截止时间
+let deadline = 0;
+// 最大时间切片周期
+const maxYieldInterval = 300;
+
+let needsPaint = false;
+/**
+ * @info https://developer.mozilla.org/en-US/docs/Web/API/Scheduling/isInputPending
+ * @description 判断当前是否有用户尝试和页面进行交互
+ */
+const scheduling = navigator.scheduling;
+// 是否让出主线程
+shouldYieldToHost = function () {
+  const currentTime = getCurrentTime();
+  if (currentTime >= deadline) {
+    if (needsPaint || scheduling.isInputPending()) {
+      // There is either a pending paint or a pending input.
+      return true;
+    }
+    // There's no pending input. Only yield if we've reached the max
+    // yield interval.
+    return currentTime >= maxYieldInterval; // 在持续运行的react应用中, currentTime肯定大于300ms, 这个判断只在初始化过程中才有可能返回false
+  } else {
+    // There's still time left in the frame.
+    return false;
+  }
+};
+
+// 请求绘制
+requestPaint = function () {
+  needsPaint = true;
+};
+
+// 设置时间切片的周期
+forceFrameRate = function (fps) {
+  if (fps < 0 || fps > 125) {
+    // Using console['error'] to evade Babel and ESLint
+    console['error'](
+      'forceFrameRate takes a positive int between 0 and 125, ' +
+        'forcing frame rates higher than 125 fps is not supported',
+    );
+    return;
+  }
+  if (fps > 0) {
+    yieldInterval = Math.floor(1000 / fps);
+  } else {
+    // reset the framerate
+    yieldInterval = 5;
+  }
+};
+```
+
+### 完整调度
+
+```javascript
+const performWorkUntilDeadline = () => {
+  if (scheduledHostCallback !== null) {
+    const currentTime = getCurrentTime(); // 1. 获取当前时间
+    deadline = currentTime + yieldInterval; // 2. 设置deadline
+    const hasTimeRemaining = true;
+    try {
+      // 3. 执行回调, 返回是否有还有剩余任务
+      const hasMoreWork = scheduledHostCallback(hasTimeRemaining, currentTime);
+      if (!hasMoreWork) {
+        // 没有剩余任务, 退出
+        isMessageLoopRunning = false;
+        scheduledHostCallback = null;
+      } else {
+        port.postMessage(null); // 有剩余任务, 发起新的调度
+      }
+    } catch (error) {
+      port.postMessage(null); // 如有异常, 重新发起调度
+      throw error;
+    }
+  } else {
+    isMessageLoopRunning = false;
+  }
+  needsPaint = false; // 重置开关
+};
+```
+![](https://7km.top/static/core.e65ca659.png)
+
 ## Q&A
 
 1. > Q: React Hydration是什么，有什么作用，是如何实现的?
@@ -59,6 +177,7 @@
    > 2. **开始工作循环** ：React 会开始一个新的工作循环。在工作循环中，React 会遍历 Fiber 树，找到需要更新的 Fiber 节点，并生成一个新的 Fiber 树。这个过程被称为 "reconciliation"。
    > 3. **中断和恢复工作** ：在工作循环中，React 可以根据需要中断和恢复工作。例如，当有一个高优先级的更新需要处理时，React 可以中断当前的工作，转而处理这个高优先级的更新。然后，当高优先级的更新处理完后，React 可以恢复之前被中断的工作。这就是所谓的 "可中断" 渲染。
    > 4. **提交更新** ：当新的 Fiber 树准备好后，React 会将其提交到 DOM。这会导致浏览器重新渲染 UI。
+   >
    >    ```javascript
    >    // 调度更新
    >    function scheduleUpdateOnFiber(fiber, lane) {
