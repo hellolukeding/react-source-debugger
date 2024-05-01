@@ -297,21 +297,21 @@ function completeUnitOfWork(unitOfWork: Fiber): void {
   }
 }
 ```
+
 构造前
 ![](https://7km.top/static/unitofwork0.2b01ce04.png)
 在上文已经说明, 进入循环构造前会调用prepareFreshStack刷新栈帧, 在进入fiber树构造循环之前, 保持这这个初始化状态:
 
-
 performUnitOfWork第 1 次调用(只执行beginWork):
 执行前: workInProgress指针指向HostRootFiber.alternate对象, 此时current = workInProgress.alternate指向fiberRoot.current是非空的(初次构造, 只在根节点时, current非空).
 执行过程: 调用updateHostRoot
-在reconcileChildren阶段, 向下构造次级子节点fiber(<App/>), 同时设置子节点(fiber(<App/>))fiber.flags |= Placement
-执行后: 返回下级节点fiber(<App/>), 移动workInProgress指针指向子节点fiber(<App/>)
+在reconcileChildren阶段, 向下构造次级子节点fiber(`<App/>`), 同时设置子节点(fiber(`<App/>`))fiber.flags |= Placement
+执行后: 返回下级节点fiber(`<App/>`), 移动workInProgress指针指向子节点fiber(`<App/>`)
 ![](https://7km.top/static/unitofwork1.20aad56c.png)
 performUnitOfWork第 2 次调用(只执行beginWork):
-执行前: workInProgress指针指向fiber(<App/>)节点, 此时current = null
+执行前: workInProgress指针指向fiber(`<App/>`)节点, 此时current = null
 执行过程: 调用updateClassComponent
-本示例中, class 实例存在生命周期函数componentDidMount, 所以会设置fiber(<App/>)节点workInProgress.flags |= Update
+本示例中, class 实例存在生命周期函数componentDidMount, 所以会设置fiber(`<App/>`)节点workInProgress.flags |= Update
 另外也会为了React DevTools能够识别状态组件的执行进度, 会设置workInProgress.flags |= PerformedWork(在commit阶段会排除这个flag, 此处只是列出workInProgress.flags的设置场景, 不讨论React DevTools)
 需要注意classInstance.render()在本步骤执行后, 虽然返回了render方法中所有的ReactElement对象, 但是随后reconcileChildren只构造次级子节点
 在reconcileChildren阶段, 向下构造次级子节点div
@@ -341,11 +341,11 @@ completeUnitOfWork执行过程: 以fiber(header)为起点, 向上回溯
 创建fiber(header)节点对应的DOM实例, 并append子节点的DOM实例
 设置DOM属性, 绑定事件等(本示例中, 节点fiber(header)没有事件绑定)
 上移副作用队列: 由于本节点fiber(header)没有副作用(fiber.flags = 0), 所以执行之后副作用队列没有实质变化(目前为空).
-向上回溯: 由于还有兄弟节点, 把workInProgress指针指向下一个兄弟节点fiber(<Content/>), 退出completeUnitOfWork.
+向上回溯: 由于还有兄弟节点, 把workInProgress指针指向下一个兄弟节点fiber(`<Content/>`), 退出completeUnitOfWork.
 
 ![](https://7km.top/static/unitofwork4.2.e7f971ec.png)
 performUnitOfWork第 5 次调用(执行beginWork):
-执行前:workInProgress指针指向fiber(<Content/>)节点.
+执行前:workInProgress指针指向fiber(`<Content/>`)节点.
 执行过程: 这是一个class类型的节点, 与第 2 次调用逻辑一致.
 执行后: 返回下级节点fiber(p), 移动workInProgress指针指向子节点fiber(p)
 ![](https://7km.top/static/unitofwork5.6a117a71.png)
@@ -360,14 +360,14 @@ completeUnitOfWork执行过程: 以fiber(p)为起点, 向上回溯
 
 执行completeWork函数: 创建fiber(p)节点对应的DOM实例, 并append子树节点的DOM实例
 上移副作用队列: 由于本节点fiber(p)没有副作用, 所以执行之后副作用队列没有实质变化(目前为空).
-向上回溯: 由于没有兄弟节点, 把workInProgress指针指向父节点fiber(<Content/>)
+向上回溯: 由于没有兄弟节点, 把workInProgress指针指向父节点fiber(`<Content/>`)
 
 ![](https://7km.top/static/unitofwork7.c44d2d4d.png)
 第 2 次循环:
 
 执行completeWork函数: class 类型的节点不做处理
 上移副作用队列:
-本节点fiber(<Content/>)的flags标志位有改动(completedWork.flags > PerformedWork), 将本节点添加到父节点(fiber(div))的副作用队列之后(firstEffect和lastEffect属性分别指向副作用队列的首部和尾部).
+本节点fiber(`<Content/>`)的flags标志位有改动(completedWork.flags > PerformedWork), 将本节点添加到父节点(fiber(div))的副作用队列之后(firstEffect和lastEffect属性分别指向副作用队列的首部和尾部).
 向上回溯: 把workInProgress指针指向父节点fiber(div)
 ![](https://7km.top/static/unitofwork7.1.9ab1933f.png)
 
@@ -375,16 +375,16 @@ completeUnitOfWork执行过程: 以fiber(p)为起点, 向上回溯
 
 执行completeWork函数: 创建fiber(div)节点对应的DOM实例, 并append子树节点的DOM实例
 上移副作用队列:
-本节点fiber(div)的副作用队列不为空, 将其拼接到父节点fiber<App/>的副作用队列后面.
-向上回溯: 把workInProgress指针指向父节点fiber(<App/>)
+本节点fiber(div)的副作用队列不为空, 将其拼接到父节点fiber `<App/>`的副作用队列后面.
+向上回溯: 把workInProgress指针指向父节点fiber(`<App/>`)
 
 ![](https://7km.top/static/unitofwork7.2.ceb09595.png)
 第 4 次循环:
 
 执行completeWork函数: class 类型的节点不做处理
 上移副作用队列:
-本节点fiber(<App/>)的副作用队列不为空, 将其拼接到父节点fiber(HostRootFiber)的副作用队列上.
-本节点fiber(<App/>)的flags标志位有改动(completedWork.flags > PerformedWork), 将本节点添加到父节点fiber(HostRootFiber)的副作用队列之后.
+本节点fiber(`<App/>`)的副作用队列不为空, 将其拼接到父节点fiber(HostRootFiber)的副作用队列上.
+本节点fiber(`<App/>`)的flags标志位有改动(completedWork.flags > PerformedWork), 将本节点添加到父节点fiber(HostRootFiber)的副作用队列之后.
 最后队列的顺序是子节点在前, 本节点在后
 向上回溯: 把workInProgress指针指向父节点fiber(HostRootFiber)
 
@@ -398,13 +398,74 @@ completeUnitOfWork执行过程: 以fiber(p)为起点, 向上回溯
 到此整个fiber树构造循环已经执行完毕, 拥有一棵完整的fiber树, 并且在fiber树的根节点上挂载了副作用队列, 副作用队列的顺序是层级越深子节点越靠前.
 renderRootSync函数退出之前, 会重置workInProgressRoot = null, 表明没有正在进行中的render. 且把最新的fiber树挂载到fiberRoot.finishedWork上. 这时整个 fiber 树的内存结构如下(注意fiberRoot.finishedWork和fiberRoot.current指针,在commitRoot阶段会进行处理):
 
-
-
 ### 对比更新
 
 > `react`应用启动后, 界面已经渲染. 如果再次发生更新, 创建 `新fiber`之前需要和 `旧fiber`进行对比. 最后构造的 fiber 树有可能是全新的, 也可能是部分更新的.
 
+三种主动更新的方式
+
+1. `Class`组件中调用 `setState`.
+2. `Function`组件中调用 `hook`对象暴露出的 `dispatchAction`.
+3. 在 `container`节点上重复调用 `render`
+
+#### setState
+
+```javascript
+//class components setState源码
+Component.prototype.setState = function (partialState, callback) {
+  this.updater.enqueueSetState(this, partialState, callback, 'setState');
+};
+
+//updater源码
+const classComponentUpdater = {
+  isMounted,
+  enqueueSetState(inst, payload, callback) {
+    // 1. 获取class实例对应的fiber节点
+    const fiber = getInstance(inst);
+    // 2. 创建update对象
+    const eventTime = requestEventTime();
+    const lane = requestUpdateLane(fiber); // 确定当前update对象的优先级
+    const update = createUpdate(eventTime, lane);
+    update.payload = payload;
+    if (callback !== undefined && callback !== null) {
+      update.callback = callback;
+    }
+    // 3. 将update对象添加到当前Fiber节点的updateQueue队列当中
+    enqueueUpdate(fiber, update);
+    // 4. 进入reconciler运作流程中的`输入`环节
+    scheduleUpdateOnFiber(fiber, lane, eventTime); // 传入的lane是update优先级
+  },
+};
+```
+
+#### 构造阶段
+
+```javascript
+// ...省略部分代码
+export function scheduleUpdateOnFiber(
+  fiber: Fiber, // fiber表示被更新的节点
+  lane: Lane, // lane表示update优先级
+  eventTime: number,
+) {
+  const root = markUpdateLaneFromFiberToRoot(fiber, lane);
+  if (lane === SyncLane) {
+    if (
+      (executionContext & LegacyUnbatchedContext) !== NoContext &&
+      (executionContext & (RenderContext | CommitContext)) === NoContext
+    ) {
+      // 初次渲染
+      performSyncWorkOnRoot(root);
+    } else {
+      // 对比更新
+      ensureRootIsScheduled(root, eventTime);
+    }
+  }
+  mostRecentlyUpdatedRoot = root;
+}
+```
+![](https://7km.top/static/fibertree-beforecommit.245f5558.png)
 ## 渲染与提交阶段
+
 
 ## reconciliation 调和
 
@@ -664,3 +725,14 @@ ReactDOM.hydrate(<App />, document.getElementById("root"));
 >      // ...
 >    }
 >    ```
+
+#### React中栈帧是什么，有什么作用？
+
+在 React 中，"栈帧" 是 Fiber 架构中的一个概念。每个 Fiber 对象可以被看作是一个栈帧。当 React 在执行组件的渲染函数或生命周期方法时，它会创建一个新的 Fiber 对象，这个对象包含了当前执行上下文的信息，如当前的 props、state、context 等。
+
+栈帧在 React 中的主要作用如下：
+
+1. **保存状态** ：每个 Fiber 对象都有一个 `memoizedState` 属性，这个属性用于保存组件的 state。当组件状态更新时，React 会创建一个新的 Fiber 对象，并更新其 `memoizedState` 属性。
+2. **保存上下文** ：每个 Fiber 对象都有一个 `contextDependencies` 属性，这个属性用于保存组件的 context 依赖。当 context 更新时，React 会遍历 Fiber 树，找到所有依赖该 context 的 Fiber 对象，并将它们标记为需要更新。
+3. **支持时间切片和并发模式** ：由于每个 Fiber 对象都是一个独立的栈帧，React 可以在执行过程中暂停和恢复任何 Fiber 对象。这使得 React 可以实现时间切片和并发模式。
+4. **支持 Hooks** ：每个 Fiber 对象都有一个 `memoizedState` 和 `updateQueue` 属性，这些属性用于保存 Hooks 的状态和更新。当组件使用 Hooks 时，React 会将 Hooks 的状态和更新保存在 Fiber 对象中。
